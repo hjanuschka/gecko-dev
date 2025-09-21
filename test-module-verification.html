@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Module Script Task Separation Verification</title>
+    <meta charset="utf-8">
+    <script>
+        window.testResults = {
+            rafBetweenModules: false,
+            timeoutBetweenModules: false,
+            promiseBetweenModules: false,
+            module1Executed: false,
+            module2Executed: false,
+            module3Executed: false
+        };
+
+        function updateDisplay() {
+            const display = document.getElementById('results');
+            if (!display) return;
+
+            let html = '<h2>Test Results:</h2>';
+            html += '<ul>';
+            html += `<li>Module 1 executed: ${window.testResults.module1Executed}</li>`;
+            html += `<li>Module 2 executed: ${window.testResults.module2Executed}</li>`;
+            html += `<li>Module 3 executed: ${window.testResults.module3Executed}</li>`;
+            html += `<li>RAF between modules: <strong>${window.testResults.rafBetweenModules}</strong></li>`;
+            html += `<li>Promise between modules: ${window.testResults.promiseBetweenModules}</li>`;
+            html += `<li>setTimeout between modules: ${window.testResults.timeoutBetweenModules}</li>`;
+            html += '</ul>';
+
+            if (window.testResults.rafBetweenModules) {
+                html += '<h3 style="color: green">✅ FEATURE ACTIVE: RAF executed between modules (async task separation)</h3>';
+            } else {
+                html += '<h3 style="color: red">❌ FEATURE NOT ACTIVE: RAF did not execute between modules (synchronous)</h3>';
+            }
+
+            display.innerHTML = html;
+        }
+    </script>
+</head>
+<body>
+    <h1>Module Script Task Separation Test</h1>
+    <div id="results">Loading...</div>
+
+    <script type="module">
+        console.log('Module 1 starting');
+        window.testResults.module1Executed = true;
+
+        // Schedule tasks
+        requestAnimationFrame(() => {
+            window.testResults.rafBetweenModules = true;
+            console.log('RAF executed between modules!');
+            updateDisplay();
+        });
+
+        Promise.resolve().then(() => {
+            window.testResults.promiseBetweenModules = true;
+            console.log('Promise executed between modules');
+        });
+
+        setTimeout(() => {
+            window.testResults.timeoutBetweenModules = true;
+            console.log('setTimeout executed between modules');
+            updateDisplay();
+        }, 0);
+
+        // Busy wait to give tasks a chance
+        const start = performance.now();
+        while (performance.now() - start < 100) {}
+
+        console.log('Module 1 ending');
+        updateDisplay();
+    </script>
+
+    <script type="module">
+        console.log('Module 2 starting');
+        window.testResults.module2Executed = true;
+
+        // Check what ran between modules
+        console.log('RAF ran between modules:', window.testResults.rafBetweenModules);
+
+        // Another busy wait
+        const start = performance.now();
+        while (performance.now() - start < 100) {}
+
+        console.log('Module 2 ending');
+        updateDisplay();
+    </script>
+
+    <script type="module">
+        console.log('Module 3 starting');
+        window.testResults.module3Executed = true;
+
+        console.log('Module 3 ending');
+        updateDisplay();
+
+        // Final update after all async tasks
+        setTimeout(() => {
+            updateDisplay();
+            console.log('Final state:', window.testResults);
+        }, 200);
+    </script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Preference Test</title>
+    <script>
+        console.log('=== SIMPLE PREFERENCE TEST ===');
+
+        // Try to access preferences via Services (this might not work in content)
+        try {
+            // This won't work from content script but let's try anyway
+            console.log('Attempting to read preference...');
+        } catch (e) {
+            console.log('Cannot read preferences from content:', e.message);
+        }
+
+        console.log('Page loaded, check about:config for dom.script.separate-defer-module-tasks.enabled');
+    </script>
+</head>
+<body>
+    <h1>Simple Preference Test</h1>
+    <p>Check browser console and about:config</p>
+
+    <script type="module">
+        console.log('Module script 1 executed');
+    </script>
+
+    <script type="module">
+        console.log('Module script 2 executed');
+    </script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Module Test - File Output</title>
+    <meta charset="utf-8">
+    <script>
+        window.results = {
+            module1Time: 0,
+            module2Time: 0,
+            module3Time: 0,
+            rafRan: false,
+            rafTime: 0
+        };
+    </script>
+</head>
+<body>
+    <h1>Module Script Test</h1>
+    <div id="output"></div>
+
+    <script type="module">
+        // Module 1
+        window.results.module1Time = performance.now();
+        console.log('Module 1 executing at', window.results.module1Time);
+
+        // Schedule RAF
+        requestAnimationFrame(() => {
+            window.results.rafRan = true;
+            window.results.rafTime = performance.now();
+            console.log('RAF executed at', window.results.rafTime);
+        });
+
+        // Busy wait 50ms
+        const start = performance.now();
+        while (performance.now() - start < 50) {}
+    </script>
+
+    <script type="module">
+        // Module 2
+        window.results.module2Time = performance.now();
+        console.log('Module 2 executing at', window.results.module2Time);
+
+        // Check if RAF ran
+        const rafRanBetween1And2 = window.results.rafRan;
+        console.log('RAF ran between module 1 and 2:', rafRanBetween1And2);
+
+        // Busy wait 50ms
+        const start = performance.now();
+        while (performance.now() - start < 50) {}
+    </script>
+
+    <script type="module">
+        // Module 3
+        window.results.module3Time = performance.now();
+        console.log('Module 3 executing at', window.results.module3Time);
+
+        // Final check
+        setTimeout(() => {
+            const output = document.getElementById('output');
+            const rafBetweenModules = window.results.rafRan &&
+                                     window.results.rafTime > window.results.module1Time &&
+                                     window.results.rafTime < window.results.module3Time;
+
+            const html = `
+                <h2>Test Results:</h2>
+                <ul>
+                    <li>Module 1 time: ${window.results.module1Time.toFixed(2)}ms</li>
+                    <li>Module 2 time: ${window.results.module2Time.toFixed(2)}ms</li>
+                    <li>Module 3 time: ${window.results.module3Time.toFixed(2)}ms</li>
+                    <li>RAF executed: ${window.results.rafRan}</li>
+                    <li>RAF time: ${window.results.rafTime.toFixed(2)}ms</li>
+                </ul>
+                <h3>${rafBetweenModules ? '✅ FEATURE ACTIVE' : '❌ FEATURE NOT ACTIVE'}</h3>
+                <p>RAF between modules: ${rafBetweenModules}</p>
+            `;
+            output.innerHTML = html;
+
+            // Also log to console
+            console.log('=== FINAL RESULTS ===');
+            console.log('RAF between modules:', rafBetweenModules);
+            console.log(rafBetweenModules ? '✅ FEATURE ACTIVE' : '❌ FEATURE NOT ACTIVE');
+        }, 200);
+    </script>
+</body>
+</html>

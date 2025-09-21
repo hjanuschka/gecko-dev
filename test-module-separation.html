@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Module Script Task Separation Test</title>
+    <meta charset="utf-8">
+    <script>
+        console.log('=== MODULE SCRIPT TASK SEPARATION TEST ===');
+        window.taskState = {
+            promise: false,
+            raf: false,
+            timeout: false,
+            logs: []
+        };
+
+        function log(msg) {
+            const time = performance.now().toFixed(2);
+            const entry = `[${time}ms] ${msg}`;
+            console.log(entry);
+            window.taskState.logs.push(entry);
+        }
+    </script>
+</head>
+<body>
+    <h1>Module Script Task Separation Test</h1>
+
+    <!-- Module scripts (all modules get task separation automatically) -->
+    <script type="module">
+        log('Module 1 start');
+
+        // Schedule tasks that should interleave when feature is enabled
+        Promise.resolve().then(() => {
+            window.taskState.promise = true;
+            log('Promise executed');
+        });
+
+        requestAnimationFrame(() => {
+            window.taskState.raf = true;
+            log('RAF executed');
+        });
+
+        setTimeout(() => {
+            window.taskState.timeout = true;
+            log('setTimeout executed');
+        }, 0);
+
+        // Busy wait for 100ms to create opportunity for task interleaving
+        const deadline1 = performance.now() + 100;
+        while (performance.now() < deadline1) {}
+
+        log('Module 1 end');
+    </script>
+
+    <script type="module">
+        log('Module 2 start');
+
+        // This test validates task interleaving behavior between module scripts.
+        // When SeparateDeferModuleScriptTasks is enabled:
+        // - ALL module scripts get task separation (no async needed)
+        // - Promise microtasks should execute between modules
+        // - RAF might execute between modules (depends on timing)
+        // - setTimeout typically won't due to lower priority
+
+        console.log('\n=== TEST RESULTS ===');
+        console.log('Promise executed between modules:', window.taskState.promise);
+        console.log('RAF executed between modules:', window.taskState.raf);
+        console.log('setTimeout executed between modules:', window.taskState.timeout);
+
+        // RAF is the key indicator - it only runs between modules when feature is enabled
+        if (window.taskState.raf) {
+            console.log('✅ FEATURE WORKING: RAF executed between module scripts!');
+        } else {
+            console.log('❌ FEATURE NOT ACTIVE: RAF did not run between modules (scripts ran synchronously)');
+        }
+
+        // Promise microtasks always run between modules (standard behavior)
+        if (window.taskState.promise) {
+            console.log('ℹ️ Promise microtasks executed (this happens regardless of feature)');
+        }
+
+        // Busy wait a bit
+        const deadline2 = performance.now() + 100;
+        while (performance.now() < deadline2) {}
+
+        log('Module 2 end');
+    </script>
+
+    <script type="module">
+        log('Module 3 start');
+
+        // Final module to show execution order
+        console.log('\n=== FINAL EXECUTION ORDER ===');
+        console.log(window.taskState.logs.join('\n'));
+
+        log('Module 3 end');
+
+        // Show final state after a delay
+        setTimeout(() => {
+            console.log('\n=== FINAL STATE ===');
+            console.log('All tasks completed:');
+            console.log('- Promise:', window.taskState.promise);
+            console.log('- RAF:', window.taskState.raf);
+            console.log('- setTimeout:', window.taskState.timeout);
+        }, 500);
+    </script>
+
+    <p>Check the console for results.</p>
+    <p>Expected behavior when feature is enabled:</p>
+    <ul>
+        <li>ALL module scripts should execute as separate tasks (no async attribute needed)</li>
+        <li>Promise microtasks should execute between module scripts</li>
+        <li>RAF may execute between modules (timing dependent)</li>
+    </ul>
+</body>
+</html>

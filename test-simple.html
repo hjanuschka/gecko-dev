@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Test</title>
+    <script>
+        console.log('=== SIMPLE MODULE TEST ===');
+        window.rafExecuted = false;
+        window.logs = [];
+
+        function log(msg) {
+            console.log(msg);
+            window.logs.push(msg);
+        }
+    </script>
+</head>
+<body>
+    <h1>Simple Module Test</h1>
+
+    <script type="module">
+        log('Module 1 start');
+
+        requestAnimationFrame(() => {
+            window.rafExecuted = true;
+            log('RAF executed - FEATURE WORKING!');
+        });
+
+        // Busy wait
+        const start = performance.now();
+        while (performance.now() - start < 50) {}
+
+        log('Module 1 end');
+    </script>
+
+    <script type="module">
+        log('Module 2 start');
+
+        if (window.rafExecuted) {
+            log('✅ SUCCESS: RAF ran between modules');
+        } else {
+            log('❌ FAIL: RAF did not run between modules');
+        }
+
+        log('Module 2 end');
+
+        // Write results to console after delay
+        setTimeout(() => {
+            console.log('\n=== FINAL RESULT ===');
+            console.log('RAF executed between modules:', window.rafExecuted);
+            console.log('Feature status:', window.rafExecuted ? 'WORKING' : 'NOT WORKING');
+        }, 100);
+    </script>
+
+</body>
+</html>

@@ -208,6 +208,8 @@ ScriptLoader::ScriptLoader(Document* aDocument)
       mLoadEventFired(false),
       mGiveUpEncoding(false),
       mContinueParsingDocumentAfterCurrentScript(false),
+      mExecutingDeferScriptsAsync(false),
+      mExecutingAsyncScriptsAsync(false),
       mReporter(new ConsoleReportCollector()) {
   LOG(("ScriptLoader::ScriptLoader %p", this));
 
@@ -1625,6 +1627,7 @@ bool ScriptLoader::ProcessInlineScript(nsIScriptElement* aElement,
       HandleLoadError(modReq, rv);
     }
 
+
     return false;
   }
 
@@ -1811,6 +1814,9 @@ void ScriptLoader::CancelAndClearScriptLoadRequests() {
   }
 
   mDeferRequests.CancelRequestsAndClear();
+  // Reset async execution state when clearing defer requests
+  mExecutingDeferScriptsAsync = false;
+  mExecutingAsyncScriptsAsync = false;
   mLoadingAsyncRequests.CancelRequestsAndClear();
   mLoadedAsyncRequests.CancelRequestsAndClear();
   mNonAsyncExternalScriptInsertedRequests.CancelRequestsAndClear();
@@ -3722,12 +3728,48 @@ void ScriptLoader::ProcessPendingRequests(bool aAllowBypassingParserBlocking) {
     ProcessRequest(request);
   }
 
-  while (ReadyToExecuteScripts() && !mLoadedAsyncRequests.isEmpty()) {
+  // Process async scripts with task separation when enabled
+  if (StaticPrefs::dom_script_separate_defer_module_tasks_enabled() &&
+      mExecutingAsyncScriptsAsync && ReadyToExecuteScripts() &&
+      !mLoadedAsyncRequests.isEmpty()) {
+    // Execute one async script and yield
     request = mLoadedAsyncRequests.StealFirst();
     if (request->IsModuleRequest()) {
       ProcessRequest(request);
     } else {
       CompileOffThreadOrProcessRequest(request);
+    }
+
+    if (!mLoadedAsyncRequests.isEmpty()) {
+      nsCOMPtr<nsIRunnable> task = NewRunnableMethod<bool>(
+          "dom::ScriptLoader::ProcessPendingRequests", this,
+          &ScriptLoader::ProcessPendingRequests, false);
+      NS_DispatchToMainThread(task.forget());
+      return;
+    } else {
+      mExecutingAsyncScriptsAsync = false;
+    }
+  } else if (!StaticPrefs::dom_script_separate_defer_module_tasks_enabled() ||
+             !mExecutingAsyncScriptsAsync) {
+    // Normal processing or start task separation
+    while (ReadyToExecuteScripts() && !mLoadedAsyncRequests.isEmpty()) {
+      request = mLoadedAsyncRequests.StealFirst();
+      if (request->IsModuleRequest()) {
+        ProcessRequest(request);
+      } else {
+        CompileOffThreadOrProcessRequest(request);
+      }
+
+      // Start task separation if enabled and more scripts remain
+      if (StaticPrefs::dom_script_separate_defer_module_tasks_enabled() &&
+          !mLoadedAsyncRequests.isEmpty()) {
+        mExecutingAsyncScriptsAsync = true;
+        nsCOMPtr<nsIRunnable> task = NewRunnableMethod<bool>(
+            "dom::ScriptLoader::ProcessPendingRequests", this,
+            &ScriptLoader::ProcessPendingRequests, false);
+        NS_DispatchToMainThread(task.forget());
+        return;
+      }
     }
   }
 
@@ -3743,10 +3785,46 @@ void ScriptLoader::ProcessPendingRequests(bool aAllowBypassingParserBlocking) {
   }
 
   if (mDeferCheckpointReached && mXSLTRequests.isEmpty()) {
-    while (ReadyToExecuteScripts() && !mDeferRequests.isEmpty() &&
-           mDeferRequests.getFirst()->IsFinished()) {
+    // Process defer scripts with task separation when enabled
+    if (StaticPrefs::dom_script_separate_defer_module_tasks_enabled() &&
+        mExecutingDeferScriptsAsync && ReadyToExecuteScripts() &&
+        !mDeferRequests.isEmpty() && mDeferRequests.getFirst()->IsFinished()) {
+      // Execute one defer script and yield
       request = mDeferRequests.StealFirst();
       ProcessRequest(request);
+
+      if (!mDeferRequests.isEmpty()) {
+        nsCOMPtr<nsIRunnable> task = NewRunnableMethod<bool>(
+            "dom::ScriptLoader::ProcessPendingRequests", this,
+            &ScriptLoader::ProcessPendingRequests, false);
+        NS_DispatchToMainThread(task.forget());
+        return;
+      } else {
+        mExecutingDeferScriptsAsync = false;
+      }
+    } else if (!StaticPrefs::dom_script_separate_defer_module_tasks_enabled()) {
+      // Normal processing when feature disabled - process all scripts synchronously
+      while (ReadyToExecuteScripts() && !mDeferRequests.isEmpty() &&
+             mDeferRequests.getFirst()->IsFinished()) {
+        request = mDeferRequests.StealFirst();
+        ProcessRequest(request);
+      }
+    } else if (ReadyToExecuteScripts() && !mDeferRequests.isEmpty() &&
+               mDeferRequests.getFirst()->IsFinished()) {
+      // Feature enabled - always process one script and yield
+      mExecutingDeferScriptsAsync = true;
+      request = mDeferRequests.StealFirst();
+      ProcessRequest(request);
+
+      if (!mDeferRequests.isEmpty()) {
+        nsCOMPtr<nsIRunnable> task = NewRunnableMethod<bool>(
+            "dom::ScriptLoader::ProcessPendingRequests", this,
+            &ScriptLoader::ProcessPendingRequests, false);
+        NS_DispatchToMainThread(task.forget());
+        return;
+      } else {
+        mExecutingDeferScriptsAsync = false;
+      }
     }
   }
 
@@ -4688,6 +4766,7 @@ nsAutoScriptLoaderDisabler::~nsAutoScriptLoaderDisabler() {
 
 #undef TRACE_FOR_TEST
 #undef TRACE_FOR_TEST_BOOL
+
 #undef TRACE_FOR_TEST_NONE
 
 #undef LOG

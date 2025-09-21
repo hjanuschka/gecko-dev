@@ -3012,6 +3012,13 @@
   value: @IS_NOT_EARLY_BETA_OR_EARLIER@
   mirror: always
 
+# Whether to separate defer and module script execution into individual tasks
+# to allow other tasks to interleave between script executions.
+- name: dom.script.separate-defer-module-tasks.enabled
+  type: bool
+  value: false
+  mirror: always
+
 # Whether to expose test interfaces of various sorts
 - name: dom.expose_test_interfaces
   type: bool

@@ -879,6 +879,8 @@ class ScriptLoader final : public JS::loader::ScriptLoaderInterface {
   bool mLoadEventFired;
   bool mGiveUpEncoding;
   bool mContinueParsingDocumentAfterCurrentScript;
+  bool mExecutingDeferScriptsAsync;
+  bool mExecutingAsyncScriptsAsync;
 
   TimeDuration mMainThreadParseTime;
 

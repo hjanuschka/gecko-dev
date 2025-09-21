@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gecko Module Script Task Separation Test</title>
+    <meta charset="utf-8">
+    <script>
+        console.log('=== GECKO MODULE SCRIPT TASK SEPARATION TEST ===');
+        window.taskState = {
+            promise: false,
+            raf: false,
+            timeout: false,
+            logs: []
+        };
+
+        function log(msg) {
+            const time = performance.now().toFixed(2);
+            const entry = `[${time}ms] ${msg}`;
+            console.log(entry);
+            window.taskState.logs.push(entry);
+        }
+    </script>
+</head>
+<body>
+    <h1>Gecko Module Script Task Separation Test</h1>
+
+    <!-- Defer scripts (type="module" is automatically deferred) -->
+    <script defer>
+        log('Defer script 1 start');
+
+        // Schedule tasks that should interleave when feature is enabled
+        Promise.resolve().then(() => {
+            window.taskState.promise = true;
+            log('Promise executed');
+        });
+
+        requestAnimationFrame(() => {
+            window.taskState.raf = true;
+            log('RAF executed');
+        });
+
+        setTimeout(() => {
+            window.taskState.timeout = true;
+            log('setTimeout executed');
+        }, 0);
+
+        // Busy wait for 50ms to create opportunity for task interleaving
+        const deadline1 = performance.now() + 50;
+        while (performance.now() < deadline1) {}
+
+        log('Defer script 1 end');
+    </script>
+
+    <script defer>
+        log('Defer script 2 start');
+
+        // This test validates task interleaving behavior between defer scripts.
+        // When dom.script.separate-defer-module-tasks.enabled is true:
+        // - Promise microtasks should execute between scripts
+        // - RAF might execute between scripts (depends on timing)
+        // - setTimeout typically won't due to lower priority
+
+        console.log('\n=== TEST RESULTS ===');
+        console.log('Promise executed between scripts:', window.taskState.promise);
+        console.log('RAF executed between scripts:', window.taskState.raf);
+        console.log('setTimeout executed between scripts:', window.taskState.timeout);
+
+        // RAF is the key indicator - it only runs between scripts when feature is enabled
+        if (window.taskState.raf) {
+            console.log('✅ FEATURE WORKING: RAF executed between defer scripts!');
+        } else {
+            console.log('❌ FEATURE NOT ACTIVE: RAF did not run between scripts (scripts ran synchronously)');
+        }
+
+        // Promise microtasks always run between scripts (standard behavior)
+        if (window.taskState.promise) {
+            console.log('ℹ️ Promise microtasks executed (this happens regardless of feature)');
+        }
+
+        // Busy wait a bit
+        const deadline2 = performance.now() + 50;
+        while (performance.now() < deadline2) {}
+
+        log('Defer script 2 end');
+    </script>
+
+    <script defer>
+        log('Defer script 3 start');
+
+        // Final script to show execution order
+        console.log('\n=== FINAL EXECUTION ORDER ===');
+        console.log(window.taskState.logs.join('\n'));
+
+        log('Defer script 3 end');
+
+        // Show final state after a delay
+        setTimeout(() => {
+            console.log('\n=== FINAL STATE ===');
+            console.log('All tasks completed:');
+            console.log('- Promise:', window.taskState.promise);
+            console.log('- RAF:', window.taskState.raf);
+            console.log('- setTimeout:', window.taskState.timeout);
+        }, 500);
+    </script>
+
+    <p>Check the console for results.</p>
+    <p>Expected behavior when feature is enabled:</p>
+    <ul>
+        <li>Promise microtasks should execute between defer scripts</li>
+        <li>RAF may execute between scripts (timing dependent)</li>
+        <li>Defer scripts should execute as separate tasks</li>
+    </ul>
+</body>
+</html>

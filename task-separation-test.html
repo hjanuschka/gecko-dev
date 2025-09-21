@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task Separation Test - More Precise</title>
+    <meta charset="utf-8">
+    <script>
+        console.log('=== TASK SEPARATION TEST (PRECISE) ===');
+
+        window.testState = {
+            scriptExecutions: [],
+            messageChannelExecuted: false,
+            rafExecuted: false,
+            timeoutExecuted: false,
+            microtaskExecuted: false
+        };
+
+        function log(msg) {
+            const time = performance.now().toFixed(2);
+            const entry = `[${time}ms] ${msg}`;
+            console.log(entry);
+            window.testState.scriptExecutions.push(entry);
+        }
+
+        // Create a MessageChannel for task posting (more reliable than RAF for testing)
+        const channel = new MessageChannel();
+        channel.port2.onmessage = () => {
+            window.testState.messageChannelExecuted = true;
+            log('MessageChannel task executed');
+        };
+
+        log('Initial script executed');
+    </script>
+</head>
+<body>
+    <h1>Task Separation Test - More Precise</h1>
+    <p>This test uses multiple task scheduling mechanisms to detect if scripts run as separate tasks.</p>
+
+    <script defer>
+        log('Defer script 1 START');
+
+        // Schedule various async tasks
+        channel.port1.postMessage('test'); // MessageChannel task
+
+        requestAnimationFrame(() => {
+            window.testState.rafExecuted = true;
+            log('RAF executed');
+        });
+
+        setTimeout(() => {
+            window.testState.timeoutExecuted = true;
+            log('setTimeout executed');
+        }, 0);
+
+        Promise.resolve().then(() => {
+            window.testState.microtaskExecuted = true;
+            log('Promise microtask executed');
+        });
+
+        // Busy wait to ensure tasks have opportunity to run
+        const start = performance.now();
+        while (performance.now() - start < 100) {
+            // Busy wait
+        }
+
+        log('Defer script 1 END');
+    </script>
+
+    <script defer>
+        log('Defer script 2 START');
+
+        // Check what executed between scripts
+        console.log('\n=== TASK INTERLEAVING RESULTS ===');
+        console.log('MessageChannel executed between scripts:', window.testState.messageChannelExecuted);
+        console.log('RAF executed between scripts:', window.testState.rafExecuted);
+        console.log('setTimeout executed between scripts:', window.testState.timeoutExecuted);
+        console.log('Promise microtask executed between scripts:', window.testState.microtaskExecuted);
+
+        // Analysis
+        let tasksSeparated = false;
+        if (window.testState.messageChannelExecuted || window.testState.rafExecuted) {
+            tasksSeparated = true;
+            console.log('✅ TASKS SEPARATED: Some tasks ran between defer scripts');
+        } else {
+            console.log('❌ TASKS NOT SEPARATED: Scripts ran synchronously');
+        }
+
+        // Microtasks always run between scripts (this is standard)
+        if (window.testState.microtaskExecuted) {
+            console.log('ℹ️ Microtasks executed (standard behavior)');
+        }
+
+        log('Defer script 2 END');
+
+        // Show complete execution order
+        setTimeout(() => {
+            console.log('\n=== COMPLETE EXECUTION ORDER ===');
+            window.testState.scriptExecutions.forEach(entry => console.log(entry));
+
+            console.log('\n=== FINAL TASK STATES ===');
+            console.log('- MessageChannel:', window.testState.messageChannelExecuted);
+            console.log('- RAF:', window.testState.rafExecuted);
+            console.log('- setTimeout:', window.testState.timeoutExecuted);
+            console.log('- Promise microtask:', window.testState.microtaskExecuted);
+        }, 200);
+    </script>
+
+    <p>Check the console for detailed results. When the feature is enabled, you should see tasks executing between defer scripts.</p>
+</body>
+</html>

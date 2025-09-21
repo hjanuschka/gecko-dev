@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Preference Test</title>
+    <meta charset="utf-8">
+    <script>
+        console.log('=== DEBUG PREFERENCE TEST ===');
+
+        // Try to access the preference if possible
+        try {
+            // This might not work from content script, but let's try
+            console.log('Attempting to check preference...');
+        } catch (e) {
+            console.log('Cannot access preference directly from content:', e.message);
+        }
+
+        window.debugState = {
+            script1: false,
+            script2: false,
+            raf: false,
+            logs: []
+        };
+
+        function log(msg) {
+            const time = performance.now().toFixed(2);
+            const entry = `[${time}ms] ${msg}`;
+            console.log(entry);
+            window.debugState.logs.push(entry);
+        }
+
+        log('Initial script executed');
+    </script>
+</head>
+<body>
+    <h1>Debug Preference Test</h1>
+
+    <script defer>
+        log('Defer script 1 START');
+        window.debugState.script1 = true;
+
+        // Schedule RAF to test if it runs between scripts
+        requestAnimationFrame(() => {
+            window.debugState.raf = true;
+            log('RAF executed - feature might be enabled');
+        });
+
+        // Busy wait to create opportunity for RAF
+        const deadline = performance.now() + 50;
+        while (performance.now() < deadline) {}
+
+        log('Defer script 1 END');
+    </script>
+
+    <script defer>
+        log('Defer script 2 START');
+        window.debugState.script2 = true;
+
+        console.log('\n=== RESULTS ===');
+        console.log('Script 1 executed:', window.debugState.script1);
+        console.log('Script 2 executing:', window.debugState.script2);
+        console.log('RAF executed between scripts:', window.debugState.raf);
+
+        if (window.debugState.raf) {
+            console.log('✅ RAF ran between defer scripts (either feature enabled OR normal timing)');
+        } else {
+            console.log('❌ RAF did not run between scripts (scripts ran synchronously)');
+        }
+
+        log('Defer script 2 END');
+
+        // Show execution order
+        setTimeout(() => {
+            console.log('\n=== EXECUTION ORDER ===');
+            console.log(window.debugState.logs.join('\n'));
+        }, 100);
+    </script>
+
+    <p>Check console for detailed results</p>
+</body>
+</html>
